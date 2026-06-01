@@ -8,17 +8,37 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        .sidebar {
+            min-height: calc(100vh - 90px);
+            border-right: 1px solid #dee2e6;
+        }
+        .lesson-item {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+        .lesson-item:hover {
+            background-color: #f1f3f5;
+        }
+        .lesson-item.active {
+            background-color: #007bff !important;
+            color: white !important;
+            font-weight: 600;
+        }
+    </style>
 </head>
 <body class="bg-light">
 
-<div class="container py-5" style="max-width: 900px;">
+<div class="container-fluid px-4 py-4">
     
     <div class="d-flex justify-content-between align-items-center pb-3 mb-4 border-bottom bg-white p-3 rounded shadow-sm">
-        <h2 class="h4 mb-0 text-primary font-weight-bold">🗂️ Управление курсом</h2>
+        <h2 class="h4 mb-0 text-primary fw-bold">🎓 Панель управления обучением</h2>
         <span id="status" class="badge bg-warning text-dark fs-6">Проверка сессии...</span>
     </div>
 
-    <div id="login-form" class="card shadow mx-auto" style="display: none; max-width: 400px;">
+    <div id="login-form" class="card shadow mx-auto my-5" style="display: none; max-width: 400px;">
         <div class="card-header bg-primary text-white text-center py-3">
             <h3 class="card-title h5 mb-0">Вход для администратора</h3>
         </div>
@@ -36,194 +56,243 @@
     </div>
 
     <div id="admin-content" style="display: none;">
-        <div class="text-end mb-4">
-            <button class="btn btn-danger px-4" onclick="logout()">Выйти из аккаунта</button>
-        </div>
+        <div class="row">
+            
+            <div class="col-md-4 col-lg-3 sidebar pe-3">
+                <div class="card shadow-sm p-3 bg-white mb-3">
+                    <h5 class="text-secondary fw-bold border-bottom pb-2 mb-3">📚 Уроки</h5>
+                    
+                    <div class="input-group mb-3">
+                        <input type="text" id="lesson-title" class="form-control form-control-sm" placeholder="Название урока">
+                        <button onclick="createLesson()" class="btn btn-sm btn-primary">➕</button>
+                    </div>
 
-        <div class="card p-4 shadow-sm mb-4 border-start border-primary border-4">
-            <h4 class="h5 mb-3 text-dark">➕ Создать новый Урок (Lesson)</h4>
-            <div class="input-group">
-                <input type="text" id="lesson-title" class="form-control" placeholder="Например: Present Simple или Математика 1 класс">
-                <button onclick="createLesson()" class="btn btn-primary">Добавить урок</button>
+                    <div id="sidebar-lessons-list" class="list-group list-group-flush overflow-auto" style="max-height: 60vh;">
+                        </div>
+                </div>
+
+                <button class="btn btn-sm btn-outline-danger w-100" onclick="logout()">Выйти из аккаунта</button>
             </div>
-        </div>
 
-        <h3 class="h4 mb-3 text-secondary">Структура данных в базе</h3>
-        
-        <div id="lessons-list"></div>
+            <div class="col-md-8 col-lg-9 ps-4">
+                <div id="center-content">
+                    <div class="card shadow-sm text-center py-5 bg-white text-muted">
+                        <div class="card-body">
+                            <h3 class="h4 mb-2">👈 Урок не выбран</h3>
+                            <p class="mb-0">Выберите существующий урок из списка слева или создайте новый, чтобы управлять его секциями и страницами.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bundle.min.js"></script>
 
 <script>
     // НАСТРОЙКА ПОДКЛЮЧЕНИЯ К SUPABASE
-    const SUPABASE_URL = 'https://cptbrdxodxzbsorqphfl.supabase.co'; 
-    const SUPABASE_ANON_KEY = 'sb_publishable_XNNJhqA0GffvW5TI19pr2w_SQ8X_xYf'; 
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; 
 
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // Глобальная переменная для хранения загруженных данных, чтобы не дёргать базу постоянно
+    let allLessonsData = [];
+    let selectedLessonId = null;
 
     // 1. АВТОМАТИЧЕСКАЯ ПРОВЕРКА СЕССИИ ПРИ ЗАГРУЗКЕ
     async function checkSession() {
         const statusEl = document.getElementById('status');
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        const { data: { session } } = await supabaseClient.auth.getSession();
 
         if (session) {
             statusEl.innerText = `Админ: ${session.user.email}`;
-            statusEl.className = "badge bg-success fs-6"; // Зеленый бейдж Бутстрапа
+            statusEl.className = "badge bg-success fs-6";
             
             document.getElementById('login-form').style.display = 'none';
             document.getElementById('admin-content').style.display = 'block';
             
-            loadLessons();
+            // Загружаем только сайдбар при входе. Центр остается Unselected!
+            loadLessonsListOnly();
         } else {
             statusEl.innerText = "Требуется вход";
-            statusEl.className = "badge bg-danger fs-6"; // Красный бейдж Бутстрапа
+            statusEl.className = "badge bg-danger fs-6";
             
             document.getElementById('login-form').style.display = 'block';
             document.getElementById('admin-content').style.display = 'none';
         }
     }
 
-    // 2. АВТОРИЗАЦИЯ СЕССИИ (ВХОД)
+    // 2. ВХОД / ВЫХОД
     async function login() {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
-
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
-        if (error) {
-            alert("Ошибка авторизации: " + error.message);
-        } else {
-            checkSession();
-        }
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) alert("Ошибка: " + error.message);
+        else checkSession();
     }
 
-    // 3. ЗАКРЫТИЕ СЕССИИ (ВЫХОД)
     async function logout() {
         await supabaseClient.auth.signOut();
+        selectedLessonId = null;
+        renderDefaultCenter();
         checkSession();
     }
 
-    // СОЗДАТЬ УРОК
+    // 3. ДОБАВЛЕНИЕ НОВОГО УРОКА ИЗ САЙДБАРА
     async function createLesson() {
         const titleInput = document.getElementById('lesson-title');
         if(!titleInput.value.trim()) return alert("Введите название урока!");
 
         const { data, error } = await supabaseClient
             .from('lessons')
-            .insert([{ title: titleInput.value }])
+            .insert([{ title: titleInput.value.trim() }])
             .select();
 
         if (error) {
-            alert("Ошибка при добавлении урока: " + error.message);
+            alert("Ошибка: " + error.message);
         } else {
             titleInput.value = '';
-            loadLessons();
+            // Перезагружаем список уроков
+            loadLessonsListOnly();
         }
     }
 
-    // ПОЛУЧИТЬ И ВЫВЕСТИ ВСЕ УРОКИ, СЕКЦИИ И СТРАНИЦЫ
-    async function loadLessons() {
-        const listContainer = document.getElementById('lessons-list');
-        listContainer.innerHTML = `
-            <div class="d-flex align-items-center text-muted">
-                <strong>Загрузка данных из Supabase...</strong>
-                <div class="spinner-border ms-auto" role="status" aria-hidden="true"></div>
-            </div>`;
+    // 4. ЗАГРУЗКА СПИСКА УРОКОВ ДЛЯ САЙДБАРА
+    async function loadLessonsListOnly() {
+        const sidebarContainer = document.getElementById('sidebar-lessons-list');
+        sidebarContainer.innerHTML = '<div class="text-muted small p-2">Загрузка...</div>';
 
+        // Тянем структуру дерева
         const { data: lessons, error } = await supabaseClient
             .from('lessons')
             .select(`
                 id, 
                 title,
                 sections (
-                    id, 
-                    type, 
-                    order_index,
-                    pages (
-                        id, 
-                        question_text, 
-                        correct_answer,
-                        order_index
-                    )
+                    id, type, order_index,
+                    pages (id, question_text, correct_answer, order_index)
                 )
             `)
             .order('id', { ascending: true });
 
         if (error) {
-            listContainer.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${error.message}</div>`;
+            sidebarContainer.innerHTML = `<div class="text-danger small p-2">Ошибка базы</div>`;
             return;
         }
 
-        if (lessons.length === 0) {
-            listContainer.innerHTML = `<div class="alert alert-info shadow-sm">База данных пока пуста. Создайте первый урок выше!</div>`;
+        allLessonsData = lessons; // Сохраняем локально
+        renderSidebar();
+    }
+
+    // 5. ОТРИСОВКА САЙДБАРА
+    function renderSidebar() {
+        const sidebarContainer = document.getElementById('sidebar-lessons-list');
+        sidebarContainer.innerHTML = "";
+
+        if (allLessonsData.length === 0) {
+            sidebarContainer.innerHTML = '<div class="text-muted small p-2">Уроков пока нет</div>';
             return;
         }
 
-        listContainer.innerHTML = "";
-
-        // Рендерим дерево данных с помощью карточек Bootstrap 5
-        lessons.forEach(lesson => {
-            let lessonHtml = `
-                <div class="card shadow-sm mb-4 border-start border-primary border-4 bg-white">
-                    <div class="card-body">
-                        <h4 class="card-title h5 text-primary mb-3">📚 Урок: ${lesson.title} <span class="text-muted fs-6">(ID: ${lesson.id})</span></h4>
-                        
-                        <div class="ms-3" id="sections-lesson-${lesson.id}">
-            `;
-
-            const sortedSections = lesson.sections.sort((a,b) => a.order_index - b.order_index);
-
-            sortedSections.forEach(section => {
-                lessonHtml += `
-                    <div class="card my-3 border-start border-success border-3 bg-light">
-                        <div class="card-body py-3">
-                            <h5 class="h6 text-success mb-2">⚙️ Секция ID: ${section.id} | Тип (Type): ${section.type} | Порядок: ${section.order_index}</h5>
-                            
-                            <div class="bg-white rounded p-2 border mb-2">
-                                <ul class="list-group list-group-flush mb-0">
-                `;
-
-                const sortedPages = section.pages.sort((a,b) => a.order_index - b.order_index);
-
-                if(sortedPages.length === 0) {
-                    lessonHtml += `<li class="list-group-item text-muted py-1 fs-7 small">В этой секции пока нет страниц</li>`;
-                }
-
-                sortedPages.forEach(page => {
-                    lessonHtml += `
-                        <li class="list-group-item py-2">
-                            <div class="fw-bold fs-6">❓ ${page.question_text} <span class="text-muted font-monospace small" style="font-size: 11px;">[Page ID: ${page.id}]</span></div>
-                            <div class="text-success small mt-1">✓ Правильный ответ: <span class="badge bg-light text-success border border-success-subtle">${page.correct_answer || 'не задан'}</span></div>
-                        </li>
-                    `;
-                });
-
-                lessonHtml += `
-                                </ul>
-                            </div>
-                            <button class="btn btn-sm btn-outline-success mt-1" onclick="alert('Форму добавления страницы для Секции ${section.id} прикрутим сюда')">➕ Добавить страницу</button>
-                        </div>
-                    </div>
-                `;
-            });
-
-            lessonHtml += `
-                        </div>
-                        <div class="mt-3">
-                            <button class="btn btn-sm btn-outline-info" onclick="alert('Форму создания секции для урока ${lesson.id} прикрутим сюда')">➕ Создать секцию в уроке</button>
-                        </div>
-                    </div>
+        allLessonsData.forEach(lesson => {
+            const isActive = lesson.id === selectedLessonId;
+            const itemHtml = `
+                <div onclick="selectLesson(${lesson.id})" 
+                     class="list-group-item list-group-item-action lesson-item rounded mb-1 p-2 ${isActive ? 'active' : ''}">
+                    📁 ${lesson.title}
                 </div>
             `;
-
-            listContainer.innerHTML += lessonHtml;
+            sidebarContainer.innerHTML += itemHtml;
         });
     }
 
+    // 6. ВЫБОР УРОКА И ОТРИСОВКА ЕГО В ЦЕНТРЕ
+    function selectLesson(lessonId) {
+        selectedLessonId = lessonId;
+        renderSidebar(); // Перерисовываем сайдбар, чтобы подсветить активный элемент
+
+        const centerContainer = document.getElementById('center-content');
+        const currentLesson = allLessonsData.find(l => l.id === lessonId);
+
+        if (!currentLesson) return;
+
+        // Начинаем верстать контент выбранного урока в центре
+        let centerHtml = `
+            <div class="card shadow-sm p-4 bg-white mb-4 border-start border-primary border-4">
+                <h3 class="h4 text-primary mb-1">📚 Текущий урок: ${currentLesson.title}</h3>
+                <small class="text-muted font-monospace">Database ID: ${currentLesson.id}</small>
+            </div>
+            
+            <h4 class="h5 mb-3 text-secondary">Секции этого урока:</h4>
+            <div id="sections-container">
+        `;
+
+        const sortedSections = (currentLesson.sections || []).sort((a,b) => a.order_index - b.order_index);
+
+        if(sortedSections.length === 0) {
+            centerHtml += `<div class="alert alert-light border text-muted">В этом уроке ещё нет ни одной секции.</div>`;
+        }
+
+        sortedSections.forEach(section => {
+            centerHtml += `
+                <div class="card shadow-sm my-3 border-start border-success border-3 bg-white">
+                    <div class="card-body py-3">
+                        <h5 class="h6 text-success fw-bold mb-2">⚙️ Секция ID: ${section.id} | Тип (Type): ${section.type} | Порядок: ${section.order_index}</h5>
+                        
+                        <div class="bg-light rounded p-2 border mb-2">
+                            <ul class="list-group list-group-flush mb-0">
+            `;
+
+            const sortedPages = (section.pages || []).sort((a,b) => a.order_index - b.order_index);
+
+            if(sortedPages.length === 0) {
+                centerHtml += `<li class="list-group-item bg-transparent text-muted py-1 small">Секция пустая. Добавьте страницы.</li>`;
+            }
+
+            sortedPages.forEach(page => {
+                centerHtml += `
+                    <li class="list-group-item bg-transparent py-2">
+                        <div class="fw-bold fs-6">❓ ${page.question_text} <span class="text-muted font-monospace" style="font-size: 11px;">[ID: ${page.id}]</span></div>
+                        <div class="text-success small">✓ Ответ: <span class="badge bg-white text-success border">${page.correct_answer || 'нет'}</span></div>
+                    </li>
+                `;
+            });
+
+            centerHtml += `
+                            </ul>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success" onclick="alert('Форма новой страницы для секции ${section.id}')">➕ Добавить страницу</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        centerHtml += `
+            </div>
+            <div class="mt-4">
+                <button class="btn btn-sm btn-outline-info" onclick="alert('Форма новой секции для урока ${currentLesson.id}')">➕ Добавить новую Секцию в урок</button>
+            </div>
+        `;
+
+        centerContainer.innerHTML = centerHtml;
+    }
+
+    // Отрисовка заглушки по умолчанию
+    function renderDefaultCenter() {
+        document.getElementById('center-content').innerHTML = `
+            <div class="card shadow-sm text-center py-5 bg-white text-muted">
+                <div class="card-body">
+                    <h3 class="h4 mb-2">👈 Урок не выбран</h3>
+                    <p class="mb-0">Выберите существующий урок из списка слева или создайте новый, чтобы управлять его секциями и страницами.</p>
+                </div>
+            </div>`;
+    }
+
+    // Старт
     checkSession();
 </script>
-
 </body>
 </html>
