@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель администратора</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        /* Базовые стили, чтобы страница не выглядела совсем уныло */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Админ-панель Викторины</h1>
+        <p>Статус подключения: <span id="status">Инициализация...</span></p>
+        
+        <div id="output"></div>
+    </div>
+
+    <script>
+        // 1. Вставь сюда свои данные из настроек проекта Supabase (Project Settings -> API)
+        const SUPABASE_URL = 'https://your-project-id.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // Твой ANON-ключ
+
+        // 2. Инициализируем клиент (он автоматически подтянет localStorage для сессий)
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // 3. Простейшая проверка связи
+        async function initAdmin() {
+            const statusElement = document.getElementById('status');
+            
+            try {
+                // Проверяем текущую сессию в localStorage
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) throw error;
+
+                if (session) {
+                    statusElement.innerText = `Авторизован как ${session.user.email}`;
+                    statusElement.style.color = "green";
+                    // Тут можно вызвать функцию загрузки данных, например: loadData();
+                } else {
+                    statusElement.innerText = "Не авторизован. Нужно войти.";
+                    statusElement.style.color = "orange";
+                    // Тут можно перенаправить на страницу логина: window.location.href = 'login.html';
+                }
+            } catch (err) {
+                statusElement.innerText = "Ошибка конфигурации: " + err.message;
+                statusElement.style.color = "red";
+            }
+        }
+
+        // Запуск при загрузке страницы
+        initAdmin();
+    </script>
+</body>
+</html>
