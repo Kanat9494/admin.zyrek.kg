@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управление Секцией</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .sidebar { min-height: calc(100vh - 90px); border-right: 1px solid #dee2e6; }
+        .menu-item { background-color: #007bff; color: white !important; font-weight: 600; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center pb-3 mb-4 border-bottom bg-white p-3 rounded shadow-sm">
+        <div class="d-flex align-items-center">
+            <button onclick="history.back()" class="btn btn-sm btn-outline-secondary me-3">← Назад к уроку</button>
+            <h2 class="h4 mb-0 text-success fw-bold">⚙️ Настройка секции</h2>
+        </div>
+        <span id="status" class="badge bg-warning text-dark fs-6">Проверка сессии...</span>
+    </div>
+
+    <div id="admin-content" style="display: none;">
+        <div class="row"> 
+            
+            <div class="col-md-4 col-lg-3 sidebar pe-3">
+                <div class="card shadow-sm bg-white mb-3 p-2">
+                    <div onclick="window.location.href='lessons.html'" class="p-2 rounded text-center menu-item" style="cursor: pointer;">
+                        📚 Уроки
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8 col-lg-9 ps-4">
+                
+                <div class="card shadow-sm p-3 bg-white mb-4 border border-info border-start-0 rounded text-start">
+                    <div>
+                        <button onclick="goToSectionPages()" class="btn btn-info text-white fw-bold px-4">
+                            📄 Страницы секции →
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm p-4 bg-white border-start border-success border-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="h5 text-dark fw-bold mb-0">📝 Данные текущей секции</h4>
+                        <span id="db-section-id" class="badge bg-light text-secondary border font-monospace">ID: --</span>
+                    </div>
+                    
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="small text-muted fw-bold mb-1">Название секции</label>
+                            <input type="text" id="edit-section-title" class="form-control" placeholder="Загрузка...">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="small text-muted fw-bold mb-1">Подзаголовок / Описание</label>
+                            <input type="text" id="edit-section-subtitle" class="form-control" placeholder="Загрузка...">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small text-muted fw-bold mb-1">Тип (section_type)</label>
+                            <input type="text" id="edit-section-type" class="form-control" placeholder="Загрузка...">
+                        </div>
+                    </div>
+                    
+                    <div class="text-end">
+                        <button onclick="updateSectionData()" class="btn btn-success btn-sm px-4">Сохранить изменения</button>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://cptbrdxodxzbsorqphfl.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'sb_publishable_XNNJhqA0GffvW5TI19pr2w_SQ8X_xYf'; 
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    let targetSectionId = null;
+    let parentLessonId = null; 
+
+    // 1. Проверяем авторизацию
+    async function checkSession() {
+        const statusEl = document.getElementById('status');
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
+        if (session) {
+            statusEl.innerText = `Админ: ${session.user.email}`;
+            statusEl.className = "badge bg-success fs-6";
+            document.getElementById('admin-content').style.display = 'block';
+            
+            initPage();
+        } else {
+            alert("Доступ запрещен. Войдите в систему.");
+            window.location.href = 'index.html';
+        }
+    }
+
+    // 2. Получаем ID секции из URL
+    function initPage() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        
+        if (!id) {
+            alert("Критическая ошибка: ID секции не передан!");
+            window.location.href = 'lessons.html';
+            return;
+        }
+        
+        targetSectionId = parseInt(id);
+        document.getElementById('db-section-id').innerText = `ID секции: ${targetSectionId}`;
+        
+        fetchSectionData();
+    }
+
+    // 3. Загружаем текущие метаданные секции из Supabase
+    async function fetchSectionData() {
+        const { data: section, error } = await supabaseClient
+            .from('sections')
+            .select('title, sub_title, section_type, lesson_id')
+            .eq('id', targetSectionId)
+            .single();
+
+        if (error || !section) {
+            alert("Не удалось加载 данные секции: " + (error?.message || "Не найдена"));
+            return;
+        }
+
+        // Заполняем поля формы данными из базы
+        document.getElementById('edit-section-title').value = section.title || '';
+        document.getElementById('edit-section-subtitle').value = section.sub_title || '';
+        document.getElementById('edit-section-type').value = section.section_type || '';
+        
+        parentLessonId = section.lesson_id;
+    }
+
+    // 4. Сохранение обновлений секции
+    async function updateSectionData() {
+        const updatedTitle = document.getElementById('edit-section-title').value.trim();
+        const updatedSubtitle = document.getElementById('edit-section-subtitle').value.trim();
+        const updatedType = document.getElementById('edit-section-type').value.trim();
+
+        if (!updatedTitle) return alert("Название секции не может быть пустым!");
+
+        const { error } = await supabaseClient
+            .from('sections')
+            .update({ title: updatedTitle, sub_title: updatedSubtitle, section_type: updatedType })
+            .eq('id', targetSectionId);
+
+        if (error) {
+            alert("Ошибка сохранения: " + error.message);
+        } else {
+            alert("Данные секции успешно обновлены!");
+        }
+    }
+
+    // 5. Кнопка "Страницы секции" теперь перенаправляет на section_pages.html
+    function goToSectionPages() {
+        window.location.href = `section_pages.html?section_id=${targetSectionId}`;
+    }
+
+    checkSession();
+</script>
+</body>
+</html>
