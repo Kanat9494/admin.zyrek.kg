@@ -3,73 +3,227 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Панель администратора</title>
+    <title>Панель администратора Викторины</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <style>
-        /* Базовые стили, чтобы страница не выглядела совсем уныло */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-    </style>
 </head>
-<body>
+<body class="bg-light">
 
-    <div class="container">
-        <h1>Админ-панель Викторины</h1>
-        <p>Статус подключения: <span id="status">Инициализация...</span></p>
-        
-        <div id="output"></div>
+<div class="container py-5" style="max-width: 900px;">
+    
+    <div class="d-flex justify-content-between align-items-center pb-3 mb-4 border-bottom bg-white p-3 rounded shadow-sm">
+        <h2 class="h4 mb-0 text-primary font-weight-bold">🗂️ Управление курсом</h2>
+        <span id="status" class="badge bg-warning text-dark fs-6">Проверка сессии...</span>
     </div>
 
-    <script>
-        // 1. Вставь сюда свои данные из настроек проекта Supabase (Project Settings -> API)
-        const SUPABASE_URL = 'https://your-project-id.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // Твой ANON-ключ
+    <div id="login-form" class="card shadow mx-auto" style="display: none; max-width: 400px;">
+        <div class="card-header bg-primary text-white text-center py-3">
+            <h3 class="card-title h5 mb-0">Вход для администратора</h3>
+        </div>
+        <div class="card-body p-4">
+            <div class="mb-3">
+                <label class="form-label">Email адрес</label>
+                <input type="email" id="email" class="form-control" placeholder="admin@course.kg">
+            </div>
+            <div class="mb-4">
+                <label class="form-label">Пароль</label>
+                <input type="password" id="password" class="form-control" placeholder="••••••••">
+            </div>
+            <button onclick="login()" class="btn btn-primary w-100 py-2">Войти в панель</button>
+        </div>
+    </div>
 
-        // 2. Инициализируем клиент (он автоматически подтянет localStorage для сессий)
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    <div id="admin-content" style="display: none;">
+        <div class="text-end mb-4">
+            <button class="btn btn-danger px-4" onclick="logout()">Выйти из аккаунта</button>
+        </div>
 
-        // 3. Простейшая проверка связи
-        async function initAdmin() {
-            const statusElement = document.getElementById('status');
+        <div class="card p-4 shadow-sm mb-4 border-start border-primary border-4">
+            <h4 class="h5 mb-3 text-dark">➕ Создать новый Урок (Lesson)</h4>
+            <div class="input-group">
+                <input type="text" id="lesson-title" class="form-control" placeholder="Например: Present Simple или Математика 1 класс">
+                <button onclick="createLesson()" class="btn btn-primary">Добавить урок</button>
+            </div>
+        </div>
+
+        <h3 class="h4 mb-3 text-secondary">Структура данных в базе</h3>
+        
+        <div id="lessons-list"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // НАСТРОЙКА ПОДКЛЮЧЕНИЯ К SUPABASE
+    const SUPABASE_URL = 'https://cptbrdxodxzbsorqphfl.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'sb_publishable_XNNJhqA0GffvW5TI19pr2w_SQ8X_xYf'; 
+
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 1. АВТОМАТИЧЕСКАЯ ПРОВЕРКА СЕССИИ ПРИ ЗАГРУЗКЕ
+    async function checkSession() {
+        const statusEl = document.getElementById('status');
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+        if (session) {
+            statusEl.innerText = `Админ: ${session.user.email}`;
+            statusEl.className = "badge bg-success fs-6"; // Зеленый бейдж Бутстрапа
             
-            try {
-                // Проверяем текущую сессию в localStorage
-                const { data: { session }, error } = await supabase.auth.getSession();
-                
-                if (error) throw error;
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('admin-content').style.display = 'block';
+            
+            loadLessons();
+        } else {
+            statusEl.innerText = "Требуется вход";
+            statusEl.className = "badge bg-danger fs-6"; // Красный бейдж Бутстрапа
+            
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('admin-content').style.display = 'none';
+        }
+    }
 
-                if (session) {
-                    statusElement.innerText = `Авторизован как ${session.user.email}`;
-                    statusElement.style.color = "green";
-                    // Тут можно вызвать функцию загрузки данных, например: loadData();
-                } else {
-                    statusElement.innerText = "Не авторизован. Нужно войти.";
-                    statusElement.style.color = "orange";
-                    // Тут можно перенаправить на страницу логина: window.location.href = 'login.html';
-                }
-            } catch (err) {
-                statusElement.innerText = "Ошибка конфигурации: " + err.message;
-                statusElement.style.color = "red";
-            }
+    // 2. АВТОРИЗАЦИЯ СЕССИИ (ВХОД)
+    async function login() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+        if (error) {
+            alert("Ошибка авторизации: " + error.message);
+        } else {
+            checkSession();
+        }
+    }
+
+    // 3. ЗАКРЫТИЕ СЕССИИ (ВЫХОД)
+    async function logout() {
+        await supabaseClient.auth.signOut();
+        checkSession();
+    }
+
+    // СОЗДАТЬ УРОК
+    async function createLesson() {
+        const titleInput = document.getElementById('lesson-title');
+        if(!titleInput.value.trim()) return alert("Введите название урока!");
+
+        const { data, error } = await supabaseClient
+            .from('lessons')
+            .insert([{ title: titleInput.value }])
+            .select();
+
+        if (error) {
+            alert("Ошибка при добавлении урока: " + error.message);
+        } else {
+            titleInput.value = '';
+            loadLessons();
+        }
+    }
+
+    // ПОЛУЧИТЬ И ВЫВЕСТИ ВСЕ УРОКИ, СЕКЦИИ И СТРАНИЦЫ
+    async function loadLessons() {
+        const listContainer = document.getElementById('lessons-list');
+        listContainer.innerHTML = `
+            <div class="d-flex align-items-center text-muted">
+                <strong>Загрузка данных из Supabase...</strong>
+                <div class="spinner-border ms-auto" role="status" aria-hidden="true"></div>
+            </div>`;
+
+        const { data: lessons, error } = await supabaseClient
+            .from('lessons')
+            .select(`
+                id, 
+                title,
+                sections (
+                    id, 
+                    type, 
+                    order_index,
+                    pages (
+                        id, 
+                        question_text, 
+                        correct_answer,
+                        order_index
+                    )
+                )
+            `)
+            .order('id', { ascending: true });
+
+        if (error) {
+            listContainer.innerHTML = `<div class="alert alert-danger">Ошибка загрузки: ${error.message}</div>`;
+            return;
         }
 
-        // Запуск при загрузке страницы
-        initAdmin();
-    </script>
+        if (lessons.length === 0) {
+            listContainer.innerHTML = `<div class="alert alert-info shadow-sm">База данных пока пуста. Создайте первый урок выше!</div>`;
+            return;
+        }
+
+        listContainer.innerHTML = "";
+
+        // Рендерим дерево данных с помощью карточек Bootstrap 5
+        lessons.forEach(lesson => {
+            let lessonHtml = `
+                <div class="card shadow-sm mb-4 border-start border-primary border-4 bg-white">
+                    <div class="card-body">
+                        <h4 class="card-title h5 text-primary mb-3">📚 Урок: ${lesson.title} <span class="text-muted fs-6">(ID: ${lesson.id})</span></h4>
+                        
+                        <div class="ms-3" id="sections-lesson-${lesson.id}">
+            `;
+
+            const sortedSections = lesson.sections.sort((a,b) => a.order_index - b.order_index);
+
+            sortedSections.forEach(section => {
+                lessonHtml += `
+                    <div class="card my-3 border-start border-success border-3 bg-light">
+                        <div class="card-body py-3">
+                            <h5 class="h6 text-success mb-2">⚙️ Секция ID: ${section.id} | Тип (Type): ${section.type} | Порядок: ${section.order_index}</h5>
+                            
+                            <div class="bg-white rounded p-2 border mb-2">
+                                <ul class="list-group list-group-flush mb-0">
+                `;
+
+                const sortedPages = section.pages.sort((a,b) => a.order_index - b.order_index);
+
+                if(sortedPages.length === 0) {
+                    lessonHtml += `<li class="list-group-item text-muted py-1 fs-7 small">В этой секции пока нет страниц</li>`;
+                }
+
+                sortedPages.forEach(page => {
+                    lessonHtml += `
+                        <li class="list-group-item py-2">
+                            <div class="fw-bold fs-6">❓ ${page.question_text} <span class="text-muted font-monospace small" style="font-size: 11px;">[Page ID: ${page.id}]</span></div>
+                            <div class="text-success small mt-1">✓ Правильный ответ: <span class="badge bg-light text-success border border-success-subtle">${page.correct_answer || 'не задан'}</span></div>
+                        </li>
+                    `;
+                });
+
+                lessonHtml += `
+                                </ul>
+                            </div>
+                            <button class="btn btn-sm btn-outline-success mt-1" onclick="alert('Форму добавления страницы для Секции ${section.id} прикрутим сюда')">➕ Добавить страницу</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            lessonHtml += `
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-sm btn-outline-info" onclick="alert('Форму создания секции для урока ${lesson.id} прикрутим сюда')">➕ Создать секцию в уроке</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            listContainer.innerHTML += lessonHtml;
+        });
+    }
+
+    checkSession();
+</script>
+
 </body>
 </html>
