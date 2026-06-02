@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактировать Страницу Секции</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .sidebar { min-height: calc(100vh - 90px); border-right: 1px solid #dee2e6; }
+        .menu-item { background-color: #007bff; color: white !important; font-weight: 600; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center pb-3 mb-4 border-bottom bg-white p-3 rounded shadow-sm">
+        <div class="d-flex align-items-center">
+            <button onclick="history.back()" class="btn btn-sm btn-outline-secondary me-3">← Назад к списку страниц</button>
+            <h2 class="h4 mb-0 text-success fw-bold">⚙️ Редактирование страницы (section_page)</h2>
+        </div>
+        <span id="status" class="badge bg-warning text-dark fs-6">Проверка сессии...</span>
+    </div>
+
+    <div id="admin-content" style="display: none;">
+        <div class="row"> 
+            
+            <div class="col-md-4 col-lg-3 sidebar pe-3">
+                <div class="card shadow-sm bg-white mb-3 p-2">
+                    <div onclick="window.location.href='lessons.html'" class="p-2 rounded text-center menu-item" style="cursor: pointer;">
+                        📚 Уроки
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8 col-lg-9 ps-4">
+                <div class="card shadow-sm p-4 bg-white border-start border-success border-4 mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="h5 text-dark fw-bold mb-0">📝 Редактировать данные</h4>
+                        <span id="db-page-id" class="badge bg-light text-secondary border font-monospace">Page ID: --</span>
+                    </div>
+                    
+                    <form id="update-page-form" onsubmit="updatePageData(event)">
+                        
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label small fw-bold text-muted">Название страницы (title)</label>
+                                <input type="text" id="page-title" class="form-control" required placeholder="Загрузка...">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold text-muted">Тип страницы (type как int)</label>
+                                <input type="number" id="page-type" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Текст объяснения (explanation_text)</label>
+                            <textarea id="page-explanation" class="form-control" rows="4" placeholder="Основное текстовое содержимое..."></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Фокусный текст / Выделение (focus_text)</label>
+                            <input type="text" id="page-focus" class="form-control" placeholder="Фраза или слово для акцента">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">Подсказка (hint)</label>
+                            <input type="text" id="page-hint" class="form-control" placeholder="Контекстная подсказка для пользователя">
+                        </div>
+
+                        <div class="card p-3 mb-4 bg-light border">
+                            <label class="form-label small fw-bold text-primary mb-1">🎵 Аудио-сопровождение страницы</label>
+                            
+                            <div id="current-audio-block" style="display: none;" class="mb-2">
+                                <div class="d-flex flex-wrap align-items-center gap-3 p-2 bg-white rounded border mb-2">
+                                    <span class="badge bg-success">Текущий трек загружен</span>
+                                    <audio id="main-audio-player" controls class="flex-grow-1"></audio>
+                                </div>
+                                <button type="button" onclick="toggleAudioReplace(true)" class="btn btn-sm btn-outline-warning">🔄 Заменить аудиофайл</button>
+                            </div>
+
+                            <div id="upload-audio-block" style="display: none;">
+                                <p class="text-muted small mb-2">Выберите новый файл в формате .mp3 или .wav (Имя сгенерируется автоматически)</p>
+                                <input type="file" id="audio-input" class="form-control form-control-sm mb-2" accept=".mp3, .wav" onchange="handleAudioSelection(this)">
+                                
+                                <div id="preview-block" style="display: none;" class="mt-2 p-2 bg-white rounded border">
+                                    <span class="badge bg-secondary mb-1">Предпрослушивание нового файла:</span>
+                                    <audio id="audio-preview" controls class="w-100"></audio>
+                                </div>
+                                
+                                <button type="button" id="cancel-replace-btn" onclick="toggleAudioReplace(false)" class="btn btn-sm btn-outline-secondary mt-2" style="display: none;">Отмена замены</button>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-7">
+                                <label class="form-label small fw-bold text-muted">Варианты ответов (options)</label>
+                                <input type="text" id="page-options" class="form-control" placeholder="Вариант А, Вариант Б, Вариант В">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label small fw-bold text-muted">Правильный ответ (correct_answer)</label>
+                                <input type="text" id="page-correct" class="form-control" placeholder="Точное значение ответа">
+                            </div>
+                        </div>
+
+                        <div class="text-end border-top pt-3">
+                            <button type="button" onclick="history.back()" class="btn btn-secondary me-2">Отмена</button>
+                            <button type="submit" id="submit-btn" class="btn btn-success px-4">Сохранить изменения</button>
+                        </div>
+
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://cptbrdxodxzbsorqphfl.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'sb_publishable_XNNJhqA0GffvW5TI19pr2w_SQ8X_xYf'; 
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    let targetPageId = null;
+    let parentSectionId = null;
+    let parentLessonId = null;
+    let serverAudioPath = null;       // Хранит текущую ссылку на аудио из БД
+    let selectedAudioFile = null;     // Хранит новый файл, если админ выбрал его на замену
+
+    // 1. Проверяем сессию админа
+    async function checkSession() {
+        const statusEl = document.getElementById('status');
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
+        if (session) {
+            statusEl.innerText = `Админ: ${session.user.email}`;
+            statusEl.className = "badge bg-success fs-6";
+            document.getElementById('admin-content').style.display = 'block';
+            initPage();
+        } else {
+            alert("Доступ запрещен. Войдите в систему.");
+            window.location.href = 'index.html';
+        }
+    }
+
+    // 2. Получаем page_id из строки URL
+    function initPage() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const pId = urlParams.get('page_id');
+
+        if (!pId) {
+            alert("Ошибка: Не передан ID страницы (page_id)!");
+            window.location.href = 'lessons.html';
+            return;
+        }
+
+        targetPageId = parseInt(pId);
+        document.getElementById('db-page-id').innerText = `ID страницы: ${targetPageId}`;
+        
+        fetchPageData();
+    }
+
+    // 3. Загружаем текущие данные страницы из Supabase
+    async function fetchPageData() {
+        const { data: page, error } = await supabaseClient
+            .from('section_pages')
+            .select('*')
+            .eq('id', targetPageId)
+            .single();
+
+        if (error || !page) {
+            alert("Не удалось загрузить данные страницы: " + (error?.message || "Страница не найдена"));
+            return;
+        }
+
+        // Заполняем текстовые поля формы
+        document.getElementById('page-title').value = page.title || '';
+        document.getElementById('page-type').value = page.type ?? 1;
+        document.getElementById('page-explanation').value = page.explanation_text || '';
+        document.getElementById('page-focus').value = page.focus_text || '';
+        document.getElementById('page-hint').value = page.hint || ''; // Подгружаем hint
+        document.getElementById('page-options').value = page.options || '';
+        document.getElementById('page-correct').value = page.correct_answer || '';
+
+        // Сохраняем связи для генерации имени файла
+        parentSectionId = page.section_id;
+        parentLessonId = page.lesson_id;
+        serverAudioPath = page.audio_path;
+
+        // Логика отображения плеера аудио
+        if (serverAudioPath) {
+            document.getElementById('main-audio-player').src = serverAudioPath;
+            document.getElementById('current-audio-block').style.display = 'block';
+            document.getElementById('upload-audio-block').style.display = 'none';
+        } else {
+            document.getElementById('current-audio-block').style.display = 'none';
+            document.getElementById('upload-audio-block').style.display = 'block';
+        }
+    }
+
+    // 4. Переключатель интерфейса "Заменить / Отмена"
+    function toggleAudioReplace(shouldReplace) {
+        if (shouldReplace) {
+            document.getElementById('current-audio-block').style.display = 'none';
+            document.getElementById('upload-audio-block').style.display = 'block';
+            document.getElementById('cancel-replace-btn').style.display = 'inline-block';
+        } else {
+            // Отмена режима замены: сбрасываем выбранный файл и возвращаем старый плеер
+            selectedAudioFile = null;
+            document.getElementById('audio-input').value = '';
+            document.getElementById('preview-block').style.display = 'none';
+            
+            document.getElementById('current-audio-block').style.display = 'block';
+            document.getElementById('upload-audio-block').style.display = 'none';
+            document.getElementById('cancel-replace-btn').style.display = 'none';
+        }
+    }
+
+    // 5. Валидация расширения файла и его предпрослушивание
+    function handleAudioSelection(input) {
+        const file = input.files[0];
+        if (!file) {
+            selectedAudioFile = null;
+            document.getElementById('preview-block').style.display = 'none';
+            return;
+        }
+
+        // Жесткая проверка расширения
+        const allowedExtensions = /(\.mp3|\.wav)$/i;
+        if (!allowedExtensions.exec(file.name)) {
+            alert("Ошибка: Разрешены исключительно форматы .mp3 и .wav!");
+            input.value = '';
+            selectedAudioFile = null;
+            document.getElementById('preview-block').style.display = 'none';
+            return;
+        }
+
+        selectedAudioFile = file;
+
+        // Генерация временной ссылки для тестов внутри админки
+        const blobURL = URL.createObjectURL(file);
+        const previewPlayer = document.getElementById('audio-preview');
+        previewPlayer.src = blobURL;
+        document.getElementById('preview-block').style.display = 'block';
+    }
+
+    // 6. Отправка обновленных данных в Supabase
+    async function updatePageData(event) {
+        event.preventDefault();
+
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+        btn.innerText = "Сохранение изменений...";
+
+        const title = document.getElementById('page-title').value.trim();
+        const type = parseInt(document.getElementById('page-type').value);
+        const explanation_text = document.getElementById('page-explanation').value.trim();
+        const focus_text = document.getElementById('page-focus').value.trim();
+        const hint = document.getElementById('page-hint').value.trim(); // Считываем hint из формы
+        const options = document.getElementById('page-options').value.trim();
+        const correct_answer = document.getElementById('page-correct').value.trim();
+
+        let finalAudioUrl = serverAudioPath;
+
+        // Если админ выбрал новый файл для загрузки
+        if (selectedAudioFile) {
+            btn.innerText = "Загрузка нового аудиофайла...";
+            
+            const fileExtension = selectedAudioFile.name.split('.').pop().toLowerCase();
+            // Наша идеальная маска: l1_s3_p2.mp3
+            const generatedFileName = `l${parentLessonId || 0}_s${parentSectionId || 0}_p${targetPageId}.${fileExtension}`;
+
+            // Загружаем в бакет 'lesson-audios' с флагом upsert: true для перезаписи старого файла
+            const { data: storageData, error: storageError } = await supabaseClient
+                .storage
+                .from('lesson-audios')
+                .upload(generatedFileName, selectedAudioFile, {
+                    cacheControl: '3600',
+                    upsert: true 
+                });
+
+            if (storageError) {
+                alert("Ошибка при загрузке аудиофайла в хранилище: " + storageError.message);
+                btn.disabled = false;
+                btn.innerText = "Сохранить изменения";
+                return;
+            }
+
+            // Получаем ссылку на загруженный файл
+            const { data: { publicUrl } } = supabaseClient
+                .storage
+                .from('lesson-audios')
+                .getPublicUrl(generatedFileName);
+                
+            finalAudioUrl = publicUrl;
+        }
+
+        // Обновляем все текстовые поля и финальный путь к аудио в таблице section_pages
+        const { error: updateError } = await supabaseClient
+            .from('section_pages')
+            .update({
+                title,
+                type,
+                explanation_text,
+                focus_text,
+                hint, // Передаем измененный hint в Supabase
+                options,
+                correct_answer,
+                audio_path: finalAudioUrl
+            })
+            .eq('id', targetPageId);
+
+        if (updateError) {
+            alert("Ошибка сохранения текстовых полей: " + updateError.message);
+            btn.disabled = false;
+            btn.innerText = "Сохранить изменения";
+        } else {
+            alert("Страница успешно обновлена!");
+            history.back(); // Возвращаемся обратно на страницу списка страниц section_pages.html
+        }
+    }
+
+    checkSession();
+</script>
+</body>
+</html>

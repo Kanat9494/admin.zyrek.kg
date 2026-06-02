@@ -160,7 +160,13 @@
 
     // 5. Кнопка "Страницы секции" теперь перенаправляет на section_pages.html
     function goToSectionPages() {
-        window.location.href = `section_pages.html?section_id=${targetSectionId}`;
+        if (!parentLessonId) {
+            // Страховка на случай, если данные из базы ещё не успели догрузиться
+            const urlParams = new URLSearchParams(window.location.search);
+            parentLessonId = urlParams.get('lesson_id');
+        }
+        
+        window.location.href = `section_pages.html?section_id=${targetSectionId}&lesson_id=${parentLessonId || ''}`;
     }
 
     checkSession();
