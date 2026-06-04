@@ -63,6 +63,13 @@
                             <input type="text" id="edit-section-type" class="form-control" placeholder="Загрузка...">
                         </div>
                     </div>
+
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <label class="small text-info fw-bold mb-1">📹 Ссылка на видео-урок (video_url)</label>
+                            <input type="url" id="edit-section-videourl" class="form-control" placeholder="https://example.com/video.mp4 (Оставьте пустым, если видео нет)">
+                        </div>
+                    </div>
                     
                     <div class="text-end">
                         <button onclick="updateSectionData()" class="btn btn-success btn-sm px-4">Сохранить изменения</button>
@@ -117,16 +124,16 @@
         fetchSectionData();
     }
 
-    // 3. Загружаем текущие метаданные секции из Supabase
+    // 3. Загружаем текущие метаданные секции из Supabase (включая video_url)
     async function fetchSectionData() {
         const { data: section, error } = await supabaseClient
             .from('sections')
-            .select('title, sub_title, section_type, lesson_id')
+            .select('title, sub_title, section_type, lesson_id, video_url') // Добавили video_url
             .eq('id', targetSectionId)
             .single();
 
         if (error || !section) {
-            alert("Не удалось加载 данные секции: " + (error?.message || "Не найдена"));
+            alert("Не удалось загрузить данные секции: " + (error?.message || "Не найдена"));
             return;
         }
 
@@ -134,6 +141,7 @@
         document.getElementById('edit-section-title').value = section.title || '';
         document.getElementById('edit-section-subtitle').value = section.sub_title || '';
         document.getElementById('edit-section-type').value = section.section_type || '';
+        document.getElementById('edit-section-videourl').value = section.video_url || ''; // Заполнение видео поля
         
         parentLessonId = section.lesson_id;
     }
@@ -143,12 +151,18 @@
         const updatedTitle = document.getElementById('edit-section-title').value.trim();
         const updatedSubtitle = document.getElementById('edit-section-subtitle').value.trim();
         const updatedType = document.getElementById('edit-section-type').value.trim();
+        const updatedVideoUrl = document.getElementById('edit-section-videourl').value.trim(); // Сбор ссылки
 
         if (!updatedTitle) return alert("Название секции не может быть пустым!");
 
         const { error } = await supabaseClient
             .from('sections')
-            .update({ title: updatedTitle, sub_title: updatedSubtitle, section_type: updatedType })
+            .update({ 
+                title: updatedTitle, 
+                sub_title: updatedSubtitle, 
+                section_type: updatedType,
+                video_url: updatedVideoUrl || null // Если строка пустая, записываем null
+            })
             .eq('id', targetSectionId);
 
         if (error) {
@@ -161,7 +175,6 @@
     // 5. Кнопка "Страницы секции" теперь перенаправляет на section_pages.html
     function goToSectionPages() {
         if (!parentLessonId) {
-            // Страховка на случай, если данные из базы ещё не успели догрузиться
             const urlParams = new URLSearchParams(window.location.search);
             parentLessonId = urlParams.get('lesson_id');
         }

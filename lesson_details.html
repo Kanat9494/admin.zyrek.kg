@@ -92,6 +92,10 @@
                     <label class="form-label small fw-bold text-muted">Тип секции (section_type)</label>
                     <input type="text" id="new-section-type" class="form-control" placeholder="Например: theory, quiz, practice">
                 </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-info">📹 Ссылка на видео-урок (video_url)</label>
+                    <input type="url" id="new-section-videourl" class="form-control" placeholder="https://example.com/video.mp4">
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -134,7 +138,6 @@
         targetLessonId = parseInt(id);
         document.getElementById('db-lesson-id').innerText = `ID урока: ${targetLessonId}`;
         
-        // Связываем модальное окно с переменной
         bootstrapModalInstance = new bootstrap.Modal(document.getElementById('addSectionModal'));
 
         fetchLessonMeta();
@@ -163,7 +166,11 @@
     // 5. Запрашиваем секции из базы и рендерим список
     async function fetchLessonSections() {
         const container = document.getElementById('sections-container');
-        const { data: sections, error } = await supabaseClient.from('sections').select('id, title, sub_title, section_type').eq('lesson_id', targetLessonId);
+        // Добавили выборку поля video_url из таблицы sections
+        const { data: sections, error } = await supabaseClient
+            .from('sections')
+            .select('id, title, sub_title, section_type, video_url')
+            .eq('lesson_id', targetLessonId);
 
         if (error) return container.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
 
@@ -177,14 +184,19 @@
         sortedSections.forEach(section => {
             const badge = section.section_type ? `<span class="badge bg-secondary text-uppercase font-monospace ms-2">${section.section_type}</span>` : '';
             
-            // Нажатие на саму карточку перенаправляет на страницу деталей секции
+            // Если видео прикреплено, показываем красивую иконку-метку
+            const videoBadge = section.video_url 
+                ? `<span class="badge bg-purple text-wrap border border-purple-subtle ms-2 text-dark bg-info-subtle">📹 Видео привязано</span>` 
+                : '';
+
             html += `
                 <div class="card shadow-sm my-3 border-start border-success border-3 bg-white section-card" onclick="goToSection(${section.id})">
                     <div class="card-body py-3">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <h5 class="h6 text-success fw-bold mb-1">⚙️ Раздел: ${section.title || 'Без названия'} ${badge}</h5>
-                                ${section.sub_title ? `<p class="text-muted small mb-0">${section.sub_title}</p>` : ''}
+                                <h5 class="h6 text-success fw-bold mb-1">⚙️ Раздел: ${escapeHtml(section.title) || 'Без названия'} ${badge} ${videoBadge}</h5>
+                                ${section.sub_title ? `<p class="text-muted small mb-0">${escapeHtml(section.sub_title)}</p>` : ''}
+                                ${section.video_url ? `<p class="text-muted text-truncate font-monospace small mb-0 mt-1" style="max-width: 500px;">🔗 ${escapeHtml(section.video_url)}</p>` : ''}
                             </div>
                             <small class="text-muted font-monospace">ID секции: ${section.id}</small>
                         </div>
@@ -192,7 +204,6 @@
                 </div>`;
         });
 
-        // Кнопка внизу просто открывает модалку для создания
         html += `
             <div class="mt-4">
                 <button class="btn btn-sm btn-outline-info" onclick="bootstrapModalInstance.show()">➕ Добавить секцию в урок</button>
@@ -201,11 +212,12 @@
         container.innerHTML = html;
     }
 
-    // 6. Добавление новой секции напрямую в Supabase
+    // 6. Добавление новой секции напрямую в Supabase вместе с video_url
     async function createSectionInDB() {
         const titleInp = document.getElementById('new-section-title');
         const subtitleInp = document.getElementById('new-section-subtitle');
         const typeInp = document.getElementById('new-section-type');
+        const videoUrlInp = document.getElementById('new-section-videourl'); // Получаем инпут видео
 
         if (!titleInp.value.trim()) return alert("Укажите название секции!");
 
@@ -215,6 +227,7 @@
                 title: titleInp.value.trim(),
                 sub_title: subtitleInp.value.trim(),
                 section_type: typeInp.value.trim(),
+                video_url: videoUrlInp.value.trim() || null, // Сохраняем video_url (или null, если пусто)
                 lesson_id: targetLessonId
             }]);
 
@@ -222,19 +235,33 @@
             alert("Ошибка при создании: " + error.message);
         } else {
             bootstrapModalInstance.hide();
-            // Очищаем инпуты
+            
+            // Очищаем все инпуты
             titleInp.value = '';
             subtitleInp.value = '';
             typeInp.value = '';
-            // Перерисовываем список
+            videoUrlInp.value = '';
+            
+            // Перерисовываем обновленный список
             fetchLessonSections(); 
         }
     }
 
     // 7. Глобальная функция перенаправления на section_details.html
     function goToSection(sectionId) {
-    window.location.href = `section_details.html?id=${sectionId}&lesson_id=${targetLessonId}`;
-}
+        window.location.href = `section_details.html?id=${sectionId}&lesson_id=${targetLessonId}`;
+    }
+
+    // Хелпер защиты вывода текста
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
 
     checkSession();
 </script>
