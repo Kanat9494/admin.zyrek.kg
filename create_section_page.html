@@ -48,10 +48,7 @@
                                 <label class="form-label small fw-bold text-muted">Тип страницы (type как int)</label>
                                 <input type="number" id="page-type" class="form-control" value="1" required>
                             </div>
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold text-muted">Длительность (duration, мин)</label>
-                                <input type="number" id="page-duration" class="form-control" min="0" placeholder="0 (без лимита)">
-                            </div>
+                            
                         </div>
 
                         <div class="mb-3">
@@ -196,9 +193,6 @@
         const title = document.getElementById('page-title').value.trim();
         const type = parseInt(document.getElementById('page-type').value);
         
-        // Получаем duration, преобразуем в число (если пусто — пишем null или 0)
-        const durationInput = document.getElementById('page-duration').value;
-        const duration = durationInput ? parseInt(durationInput) : null;
 
         const explanation_text = document.getElementById('page-explanation').value.trim();
         const focus_text = document.getElementById('page-focus').value.trim();
@@ -212,7 +206,6 @@
             .insert([{
                 title,
                 type,
-                duration, // Отправляем duration в Supabase
                 explanation_text,
                 focus_text,
                 hint, 
