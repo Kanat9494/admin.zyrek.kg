@@ -40,13 +40,17 @@
                     <form id="create-page-form" onsubmit="saveNewPage(event)">
                         
                         <div class="row g-3 mb-3">
-                            <div class="col-md-8">
+                            <div class="col-md-5">
                                 <label class="form-label small fw-bold text-muted">Название страницы (title)</label>
                                 <input type="text" id="page-title" class="form-control" required placeholder="Например: Изучаем новые термины">
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label small fw-bold text-muted">Тип страницы (type как int)</label>
                                 <input type="number" id="page-type" class="form-control" value="1" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-muted">Длительность (duration, мин)</label>
+                                <input type="number" id="page-duration" class="form-control" min="0" placeholder="0 (без лимита)">
                             </div>
                         </div>
 
@@ -191,9 +195,14 @@
 
         const title = document.getElementById('page-title').value.trim();
         const type = parseInt(document.getElementById('page-type').value);
+        
+        // Получаем duration, преобразуем в число (если пусто — пишем null или 0)
+        const durationInput = document.getElementById('page-duration').value;
+        const duration = durationInput ? parseInt(durationInput) : null;
+
         const explanation_text = document.getElementById('page-explanation').value.trim();
         const focus_text = document.getElementById('page-focus').value.trim();
-        const hint = document.getElementById('page-hint').value.trim(); // Получаем значение hint
+        const hint = document.getElementById('page-hint').value.trim(); 
         const options = document.getElementById('page-options').value.trim();
         const correct_answer = document.getElementById('page-correct').value.trim();
 
@@ -203,9 +212,10 @@
             .insert([{
                 title,
                 type,
+                duration, // Отправляем duration в Supabase
                 explanation_text,
                 focus_text,
-                hint, // Отправляем hint в Supabase
+                hint, 
                 options,
                 correct_answer,
                 section_id: sectionId,

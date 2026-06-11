@@ -88,10 +88,18 @@
                     <label class="form-label small fw-bold text-muted">Подзаголовок (sub_title)</label>
                     <input type="text" id="new-section-subtitle" class="form-control" placeholder="Например: Основные синтаксические правила">
                 </div>
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">Тип секции (section_type)</label>
-                    <input type="text" id="new-section-type" class="form-control" placeholder="Например: theory, quiz, practice">
+                
+                <div class="row g-2 mb-3">
+                    <div class="col-md-7">
+                        <label class="form-label small fw-bold text-muted">Тип секции (section_type)</label>
+                        <input type="text" id="new-section-type" class="form-control" placeholder="Например: theory, quiz, practice">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small fw-bold text-muted">Длительность (duration, мин)</label>
+                        <input type="number" id="new-section-duration" class="form-control" min="0" placeholder="0 (без лимита)">
+                    </div>
                 </div>
+
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-info">📹 Ссылка на видео-урок (video_url)</label>
                     <input type="url" id="new-section-videourl" class="form-control" placeholder="https://example.com/video.mp4">
@@ -166,10 +174,10 @@
     // 5. Запрашиваем секции из базы и рендерим список
     async function fetchLessonSections() {
         const container = document.getElementById('sections-container');
-        // Добавили выборку поля video_url из таблицы sections
+        // Добавили выборку поля duration вместе с остальными
         const { data: sections, error } = await supabaseClient
             .from('sections')
-            .select('id, title, sub_title, section_type, video_url')
+            .select('id, title, sub_title, section_type, video_url, duration')
             .eq('lesson_id', targetLessonId);
 
         if (error) return container.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
@@ -184,9 +192,13 @@
         sortedSections.forEach(section => {
             const badge = section.section_type ? `<span class="badge bg-secondary text-uppercase font-monospace ms-2">${section.section_type}</span>` : '';
             
-            // Если видео прикреплено, показываем красивую иконку-метку
             const videoBadge = section.video_url 
                 ? `<span class="badge bg-purple text-wrap border border-purple-subtle ms-2 text-dark bg-info-subtle">📹 Видео привязано</span>` 
+                : '';
+
+            // Отображение метки времени, если duration задан и больше нуля
+            const durationBadge = section.duration 
+                ? `<span class="badge bg-warning-subtle text-dark border border-warning-subtle ms-2">⏱️ ${section.duration} мин</span>` 
                 : '';
 
             html += `
@@ -194,7 +206,7 @@
                     <div class="card-body py-3">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <h5 class="h6 text-success fw-bold mb-1">⚙️ Раздел: ${escapeHtml(section.title) || 'Без названия'} ${badge} ${videoBadge}</h5>
+                                <h5 class="h6 text-success fw-bold mb-1">⚙️ Раздел: ${escapeHtml(section.title) || 'Без названия'} ${badge} ${videoBadge} ${durationBadge}</h5>
                                 ${section.sub_title ? `<p class="text-muted small mb-0">${escapeHtml(section.sub_title)}</p>` : ''}
                                 ${section.video_url ? `<p class="text-muted text-truncate font-monospace small mb-0 mt-1" style="max-width: 500px;">🔗 ${escapeHtml(section.video_url)}</p>` : ''}
                             </div>
@@ -212,14 +224,18 @@
         container.innerHTML = html;
     }
 
-    // 6. Добавление новой секции напрямую в Supabase вместе с video_url
+    // 6. Добавление новой секции напрямую в Supabase вместе с video_url и duration
     async function createSectionInDB() {
         const titleInp = document.getElementById('new-section-title');
         const subtitleInp = document.getElementById('new-section-subtitle');
         const typeInp = document.getElementById('new-section-type');
-        const videoUrlInp = document.getElementById('new-section-videourl'); // Получаем инпут видео
+        const durationInp = document.getElementById('new-section-duration'); // Получаем инпут времени
+        const videoUrlInp = document.getElementById('new-section-videourl'); 
 
         if (!titleInp.value.trim()) return alert("Укажите название секции!");
+
+        // Парсим значение duration в число (если пусто, пишем null)
+        const durationValue = durationInp.value ? parseInt(durationInp.value) : null;
 
         const { error } = await supabaseClient
             .from('sections')
@@ -227,7 +243,8 @@
                 title: titleInp.value.trim(),
                 sub_title: subtitleInp.value.trim(),
                 section_type: typeInp.value.trim(),
-                video_url: videoUrlInp.value.trim() || null, // Сохраняем video_url (или null, если пусто)
+                duration: durationValue, // Сохраняем duration в Supabase
+                video_url: videoUrlInp.value.trim() || null, 
                 lesson_id: targetLessonId
             }]);
 
@@ -240,6 +257,7 @@
             titleInp.value = '';
             subtitleInp.value = '';
             typeInp.value = '';
+            durationInp.value = ''; // Очистка нового поля
             videoUrlInp.value = '';
             
             // Перерисовываем обновленный список

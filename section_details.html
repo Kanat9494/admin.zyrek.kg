@@ -50,11 +50,11 @@
                     </div>
                     
                     <div class="row g-2 mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="small text-muted fw-bold mb-1">Название секции</label>
                             <input type="text" id="edit-section-title" class="form-control" placeholder="Загрузка...">
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <label class="small text-muted fw-bold mb-1">Подзаголовок / Описание</label>
                             <input type="text" id="edit-section-subtitle" class="form-control" placeholder="Загрузка...">
                         </div>
@@ -62,11 +62,15 @@
                             <label class="small text-muted fw-bold mb-1">Тип (section_type)</label>
                             <input type="text" id="edit-section-type" class="form-control" placeholder="Загрузка...">
                         </div>
+                        <div class="col-md-2">
+                            <label class="small text-muted fw-bold mb-1">Время (мин)</label>
+                            <input type="number" id="edit-section-duration" class="form-control" min="0" placeholder="0">
+                        </div>
                     </div>
 
                     <div class="row mb-4">
                         <div class="col-12">
-                            <label class="small text-info fw-bold mb-1">📹 Ссылка на видео-урок (video_url)</label>
+                            <label class="small text-info fw-bold mb-1">📹 Ссылка на video-урок (video_url)</label>
                             <input type="url" id="edit-section-videourl" class="form-control" placeholder="https://example.com/video.mp4 (Оставьте пустым, если видео нет)">
                         </div>
                     </div>
@@ -124,11 +128,11 @@
         fetchSectionData();
     }
 
-    // 3. Загружаем текущие метаданные секции из Supabase (включая video_url)
+    // 3. Загружаем текущие метаданные секции из Supabase (включая video_url и duration)
     async function fetchSectionData() {
         const { data: section, error } = await supabaseClient
             .from('sections')
-            .select('title, sub_title, section_type, lesson_id, video_url') // Добавили video_url
+            .select('title, sub_title, section_type, lesson_id, video_url, duration') // Добавили duration
             .eq('id', targetSectionId)
             .single();
 
@@ -141,7 +145,8 @@
         document.getElementById('edit-section-title').value = section.title || '';
         document.getElementById('edit-section-subtitle').value = section.sub_title || '';
         document.getElementById('edit-section-type').value = section.section_type || '';
-        document.getElementById('edit-section-videourl').value = section.video_url || ''; // Заполнение видео поля
+        document.getElementById('edit-section-videourl').value = section.video_url || '';
+        document.getElementById('edit-section-duration').value = section.duration !== null ? section.duration : ''; // Заполнение поля duration
         
         parentLessonId = section.lesson_id;
     }
@@ -151,7 +156,11 @@
         const updatedTitle = document.getElementById('edit-section-title').value.trim();
         const updatedSubtitle = document.getElementById('edit-section-subtitle').value.trim();
         const updatedType = document.getElementById('edit-section-type').value.trim();
-        const updatedVideoUrl = document.getElementById('edit-section-videourl').value.trim(); // Сбор ссылки
+        const updatedVideoUrl = document.getElementById('edit-section-videourl').value.trim();
+        
+        // Сбор значения числового поля duration
+        const durationInp = document.getElementById('edit-section-duration').value;
+        const updatedDuration = durationInp ? parseInt(durationInp) : null;
 
         if (!updatedTitle) return alert("Название секции не может быть пустым!");
 
@@ -161,7 +170,8 @@
                 title: updatedTitle, 
                 sub_title: updatedSubtitle, 
                 section_type: updatedType,
-                video_url: updatedVideoUrl || null // Если строка пустая, записываем null
+                duration: updatedDuration, // Обновляем duration в базе данных
+                video_url: updatedVideoUrl || null 
             })
             .eq('id', targetSectionId);
 
